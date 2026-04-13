@@ -1,0 +1,98 @@
+# BoerieCall — Deployment Guide
+
+## What's Included
+- Full Next.js 16 e-commerce site (smoked meats & biltong)
+- SQLite database with 17 products, 1 admin user
+- All API routes (products, cart, orders, auth, admin)
+
+## Admin Login
+- **Email:** admin@boeriecall.co.za
+- **Password:** admin123
+
+---
+
+## Option 1: Deploy to Vercel (Easiest — Free)
+
+1. Go to [vercel.com](https://vercel.com) and create a free account
+2. Click **"New Project"** → **"Upload"** → upload the `boeriecall-site.zip`
+3. Vercel will auto-detect Next.js and deploy
+4. **Important:** SQLite won't persist on Vercel. For production, switch to Vercel Postgres or Supabase.
+
+## Option 2: Deploy to Railway ($5/month — Best for this project)
+
+Railway supports persistent filesystem, so SQLite works out of the box.
+
+1. Go to [railway.app](https://railway.app) and create an account
+2. Click **"New Project"** → **"Deploy from GitHub"**
+3. Push this project to a GitHub repo first:
+   ```bash
+   git init
+   git add .
+   git commit -m "BoerieCall initial deploy"
+   git remote add origin https://github.com/YOUR_USERNAME/boeriecall.git
+   git push -u origin main
+   ```
+4. In Railway, select your repo → it auto-deploys
+5. Add environment variable: `DATABASE_URL=file:/app/db/custom.db`
+
+## Option 3: Self-Host on Your Own Server (VPS/VPS)
+
+Requirements: Node.js 18+ or Bun installed
+
+```bash
+# Upload the zip to your server, then:
+unzip boeriecall-site.zip -d boeriecall
+cd boeriecall
+npm install   # or: bun install
+
+# Seed the database
+bun run seed.ts
+
+# Production build
+npm run build
+npm run start
+# Server runs on port 3000
+```
+
+### With Nginx (recommended):
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+### With PM2 (keep it running):
+```bash
+npm install -g pm2
+pm2 start npm --name "boeriecall" -- start
+pm2 save
+pm2 startup
+```
+
+## Option 4: Netlify
+
+Similar to Vercel but also requires a database change for production.
+
+---
+
+## Domain Setup
+After deploying, point your domain (e.g. boeriecall.co.za) to your deployment platform:
+- **Vercel:** Add domain in Project Settings → Domains
+- **Railway:** Add custom domain in Settings → Networking
+- **Self-host:** Configure DNS A record to your server IP
+
+## Notes
+- The site uses `sql.js` (SQLite via WASM) for the database
+- For high-traffic production, consider switching to PostgreSQL via Prisma or Drizzle
+- Stitch payment integration is simulated — connect to real Stitch API for live payments
+- Reseller features: 10% discount + free delivery for bulk orders in Jhb/Pta
