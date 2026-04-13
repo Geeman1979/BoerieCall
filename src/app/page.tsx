@@ -423,9 +423,9 @@ function ProductCard({ product }: { product: Product }) {
   const catBg = CATEGORY_BG[product.category] || 'bg-gray-50 border-gray-200';
 
   return (
-    <button
+    <div
       onClick={() => { setSelectedProduct(product); setView('product'); }}
-      className="bg-white rounded-xl border border-border overflow-hidden card-hover text-left group"
+      className="bg-white rounded-xl border border-border overflow-hidden card-hover text-left group cursor-pointer"
     >
       <div className={`aspect-[4/3] ${catBg} border-b flex items-center justify-center relative`}>
         <span className="text-5xl">
@@ -460,7 +460,7 @@ function ProductCard({ product }: { product: Product }) {
           </button>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
