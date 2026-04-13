@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
-function getAdminUser(request: NextRequest) {
+async function getAdminUser(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value;
   if (!sessionId) return null;
-  const db = getDb();
-  const user = db.query('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
+  const db = await getDb();
+  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
   if (!user || user.role !== 'ADMIN') return null;
   return user;
 }
@@ -15,7 +15,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const admin = getAdminUser(request);
+    const admin = await getAdminUser(request);
     if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -32,12 +32,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     db.prepare(`
       UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?
     `).run(status, id);
+    db.save();
 
-    const order = db.query('SELECT * FROM orders WHERE id = ?').get(id);
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     return NextResponse.json({ order });
   } catch (error) {
     console.error('Update order status error:', error);

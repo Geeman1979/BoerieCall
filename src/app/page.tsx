@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   Flame, ShoppingCart, User, LogOut, LogIn, Search, Menu, X, Plus, Minus, Trash2,
   ChevronRight, Package, Heart, Star, Truck, Shield, Award, Tag,

@@ -5,24 +5,24 @@ function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
-function getAdminUser(request: NextRequest) {
+async function getAdminUser(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value;
   if (!sessionId) return null;
-  const db = getDb();
-  const user = db.query('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
+  const db = await getDb();
+  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
   if (!user || user.role !== 'ADMIN') return null;
   return user;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const admin = getAdminUser(request);
+    const admin = await getAdminUser(request);
     if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = getDb();
-    const products = db.query('SELECT * FROM products ORDER BY name ASC').all() as any[];
+    const db = await getDb();
+    const products = db.prepare('SELECT * FROM products ORDER BY name ASC').all() as any[];
     return NextResponse.json({ products });
   } catch (error) {
     console.error('Admin products list error:', error);
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = getAdminUser(request);
+    const admin = await getAdminUser(request);
     if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name, category, and cost price are required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     const id = generateId();
 
     db.prepare(`
@@ -54,8 +54,9 @@ export async function POST(request: NextRequest) {
       cost_price, markup_percent || 0, markup_amount || 0, selling_price || cost_price,
       weight || 0, stock_quantity || 0, image_url || null
     );
+    db.save();
 
-    const product = db.query('SELECT * FROM products WHERE id = ?').get(id);
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
     console.error('Create product error:', error);
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = getAdminUser(request);
+    const admin = await getAdminUser(request);
     if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -76,7 +77,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
 
     db.prepare(`
       UPDATE products SET
@@ -91,8 +92,9 @@ export async function PUT(request: NextRequest) {
       weight, stock_quantity, image_url, is_active !== undefined ? (is_active ? 1 : 0) : 1,
       id
     );
+    db.save();
 
-    const product = db.query('SELECT * FROM products WHERE id = ?').get(id);
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
     return NextResponse.json({ product });
   } catch (error) {
     console.error('Update product error:', error);
@@ -102,7 +104,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const admin = getAdminUser(request);
+    const admin = await getAdminUser(request);
     if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -114,8 +116,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     db.prepare('DELETE FROM products WHERE id = ?').run(id);
+    db.save();
 
     return NextResponse.json({ message: 'Product deleted' });
   } catch (error) {
@@ -126,14 +129,14 @@ export async function DELETE(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const admin = getAdminUser(request);
+    const admin = await getAdminUser(request);
     if (!admin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { markup_percent, markup_amount } = await request.json();
 
-    const db = getDb();
+    const db = await getDb();
 
     if (markup_percent != null && markup_percent !== 0) {
       db.prepare(`
@@ -152,8 +155,9 @@ export async function PATCH(request: NextRequest) {
           updated_at = datetime('now')
       `).run(markup_amount, markup_amount);
     }
+    db.save();
 
-    const products = db.query('SELECT * FROM products ORDER BY name ASC').all();
+    const products = db.prepare('SELECT * FROM products ORDER BY name ASC').all();
     return NextResponse.json({ products });
   } catch (error) {
     console.error('Bulk markup error:', error);

@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
     const search = searchParams.get('search');
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     else if (sort === 'newest') query += ' ORDER BY created_at DESC';
     else query += ' ORDER BY name ASC';
 
-    const products = db.query(query).all(...params) as any[];
+    const products = db.prepare(query).all(...params) as any[];
 
     return NextResponse.json({ products });
   } catch (error) {

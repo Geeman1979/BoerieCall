@@ -13,9 +13,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
 
-    const existing = db.query('SELECT id FROM users WHERE email = ?').get(email);
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existing) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }
@@ -25,8 +25,9 @@ export async function POST(request: NextRequest) {
       INSERT INTO users (id, name, email, password, phone, city, role)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, name, email, password, phone || null, city || 'Other', role || 'BUYER');
+    db.save();
 
-    const user = db.query('SELECT id, name, email, phone, address, city, role FROM users WHERE id = ?').get(id);
+    const user = db.prepare('SELECT id, name, email, phone, address, city, role FROM users WHERE id = ?').get(id);
 
     const response = NextResponse.json({ user, message: 'Registration successful' });
     response.cookies.set('session_id', id, {

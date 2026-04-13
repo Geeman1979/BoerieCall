@@ -5,30 +5,30 @@ function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
-function getUser(request: NextRequest) {
+async function getUser(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value;
   if (!sessionId) return null;
-  const db = getDb();
-  const user = db.query('SELECT id, role, email, name FROM users WHERE id = ?').get(sessionId) as any;
+  const db = await getDb();
+  const user = db.prepare('SELECT id, role, email, name FROM users WHERE id = ?').get(sessionId) as any;
   return user;
 }
 
-function getAdminUser(request: NextRequest) {
+async function getAdminUser(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value;
   if (!sessionId) return null;
-  const db = getDb();
-  const user = db.query('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
+  const db = await getDb();
+  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
   if (!user || user.role !== 'ADMIN') return null;
   return user;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const db = getDb();
+    const db = await getDb();
 
-    const admin = getAdminUser(request);
+    const admin = await getAdminUser(request);
     if (admin) {
-      const orders = db.query(`
+      const orders = db.prepare(`
         SELECT o.*, u.name as user_name, u.email as user_email
         FROM orders o
         LEFT JOIN users u ON o.user_id = u.id
@@ -36,22 +36,22 @@ export async function GET(request: NextRequest) {
       `).all() as any[];
 
       const enriched = orders.map(order => {
-        const items = db.query('SELECT * FROM order_items WHERE order_id = ?').all(order.id) as any[];
+        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id) as any[];
         return { ...order, items };
       });
 
       return NextResponse.json({ orders: enriched });
     }
 
-    const user = getUser(request);
+    const user = await getUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const orders = db.query('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC').all(user.id) as any[];
+    const orders = db.prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC').all(user.id) as any[];
 
     const enriched = orders.map(order => {
-      const items = db.query('SELECT * FROM order_items WHERE order_id = ?').all(order.id) as any[];
+      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id) as any[];
       return { ...order, items };
     });
 
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = getUser(request);
+    const user = await getUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -75,10 +75,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Delivery address and city are required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
 
     // Get cart items
-    const cartItems = db.query(`
+    const cartItems = db.prepare(`
       SELECT ci.*, p.name, p.selling_price, p.weight, p.cost_price, p.stock_quantity, p.category
       FROM cart_items ci
       LEFT JOIN products p ON ci.product_id = p.id
@@ -152,9 +152,10 @@ export async function POST(request: NextRequest) {
 
     // Clear cart
     db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(user.id);
+    db.save();
 
-    const order = db.query('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
-    const items = db.query('SELECT * FROM order_items WHERE order_id = ?').all(orderId) as any[];
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId) as any[];
 
     return NextResponse.json({ order: { ...order, items } }, { status: 201 });
   } catch (error) {

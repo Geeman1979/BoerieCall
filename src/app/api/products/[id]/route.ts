@@ -7,8 +7,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const db = getDb();
-    const product = db.query('SELECT * FROM products WHERE id = ?').get(id) as any;
+    const db = await getDb();
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id) as any;
 
     if (!product) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
