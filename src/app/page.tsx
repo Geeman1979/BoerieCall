@@ -940,7 +940,7 @@ function AdminProducts() {
         <p className="text-sm text-muted-foreground">{products.length} products</p>
         <button onClick={() => { setEditing(null); setShowForm(true); }} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2"><Plus className="w-4 h-4" /> Add Product</button>
       </div>
-      {showForm && <ProductForm editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={load} />}
+      {showForm && <ProductForm editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={refreshProducts} />}
       <div className="space-y-2 max-h-[60vh] overflow-y-auto">
         {products.map(p => (
           <div key={p.id} className="bg-white rounded-lg border border-border p-4 flex items-center gap-4">

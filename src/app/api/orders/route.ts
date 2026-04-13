@@ -140,15 +140,11 @@ export async function POST(request: NextRequest) {
 
     const updateStock = db.prepare('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?');
 
-    const createOrderItems = db.transaction(() => {
-      for (const item of cartItems) {
-        const itemId = generateId();
-        insertItem.run(itemId, orderId, item.product_id, item.name, item.quantity, item.selling_price, item.weight);
-        updateStock.run(item.quantity, item.product_id);
-      }
-    });
-
-    createOrderItems();
+    for (const item of cartItems) {
+      const itemId = generateId();
+      insertItem.run(itemId, orderId, item.product_id, item.name, item.quantity, item.selling_price, item.weight);
+      updateStock.run(item.quantity, item.product_id);
+    }
 
     // Clear cart
     db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(user.id);
