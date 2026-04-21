@@ -4,10 +4,12 @@ import fs from 'fs';
 
 const dbPath = process.env.DATABASE_URL?.replace('file:', '') || path.join(process.cwd(), 'db', 'boeriecall.db');
 
-let _db: SqlJsDatabase | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _db: any = null;
 let _initialized = false;
 
-async function initDb(): Promise<SqlJsDatabase> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function initDb(): Promise<any> {
   if (_db) return _db;
   const SQL = await initSqlJs();
   const dbDir = path.dirname(dbPath);
@@ -25,7 +27,7 @@ async function initDb(): Promise<SqlJsDatabase> {
   return _db;
 }
 
-function initTables(db: SqlJsDatabase) {
+function initTables(db: any) {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,

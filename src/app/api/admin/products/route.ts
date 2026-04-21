@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
-}
+import { supabase, generateId } from '@/lib/supabase';
 
 async function getAdminUser(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value;
   if (!sessionId) return null;
-  const db = await getDb();
-  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
+  const { data: user } = await supabase.from('users').select('id, role').eq('id', sessionId).single();
   if (!user || user.role !== 'ADMIN') return null;
   return user;
 }
@@ -17,13 +12,10 @@ async function getAdminUser(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const admin = await getAdminUser(request);
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const db = await getDb();
-    const products = db.prepare('SELECT * FROM products ORDER BY name ASC').all() as any[];
-    return NextResponse.json({ products });
+    const { data: products } = await supabase.from('products').select('*').order('name');
+    return NextResponse.json({ products: products || [] });
   } catch (error) {
     console.error('Admin products list error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -33,30 +25,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const admin = await getAdminUser(request);
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { name, description, category, subcategory, cost_price, markup_percent, markup_amount, selling_price, weight, stock_quantity, image_url } = await request.json();
+    if (!name || !category || cost_price == null) return NextResponse.json({ error: 'Name, category, and cost price are required' }, { status: 400 });
 
-    if (!name || !category || cost_price == null) {
-      return NextResponse.json({ error: 'Name, category, and cost price are required' }, { status: 400 });
-    }
-
-    const db = await getDb();
     const id = generateId();
+    await supabase.from('products').insert({
+      id, name, description: description || null, category, subcategory: subcategory || null,
+      cost_price, markup_percent: markup_percent || 0, markup_amount: markup_amount || 0,
+      selling_price: selling_price || cost_price, weight: weight || 0,
+      stock_quantity: stock_quantity || 0, image_url: image_url || null,
+    });
 
-    db.prepare(`
-      INSERT INTO products (id, name, description, category, subcategory, cost_price, markup_percent, markup_amount, selling_price, weight, stock_quantity, image_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, name, description || null, category, subcategory || null,
-      cost_price, markup_percent || 0, markup_amount || 0, selling_price || cost_price,
-      weight || 0, stock_quantity || 0, image_url || null
-    );
-    db.save();
-
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    const { data: product } = await supabase.from('products').select('*').eq('id', id).single();
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
     console.error('Create product error:', error);
@@ -67,34 +49,19 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const admin = await getAdminUser(request);
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id, name, description, category, subcategory, cost_price, markup_percent, markup_amount, selling_price, weight, stock_quantity, image_url, is_active } = await request.json();
+    if (!id) return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
 
-    if (!id) {
-      return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
-    }
-
-    const db = await getDb();
-
-    db.prepare(`
-      UPDATE products SET
-        name = ?, description = ?, category = ?, subcategory = ?,
-        cost_price = ?, markup_percent = ?, markup_amount = ?,
-        selling_price = ?, weight = ?, stock_quantity = ?,
-        image_url = ?, is_active = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).run(
+    await supabase.from('products').update({
       name, description, category, subcategory,
-      cost_price, markup_percent || 0, markup_amount || 0, selling_price,
-      weight, stock_quantity, image_url, is_active !== undefined ? (is_active ? 1 : 0) : 1,
-      id
-    );
-    db.save();
+      cost_price, markup_percent: markup_percent || 0, markup_amount: markup_amount || 0,
+      selling_price, weight, stock_quantity, image_url,
+      is_active: is_active !== undefined ? is_active : true,
+    }).eq('id', id);
 
-    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    const { data: product } = await supabase.from('products').select('*').eq('id', id).single();
     return NextResponse.json({ product });
   } catch (error) {
     console.error('Update product error:', error);
@@ -105,21 +72,13 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const admin = await getAdminUser(request);
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    if (!id) return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
 
-    if (!id) {
-      return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
-    }
-
-    const db = await getDb();
-    db.prepare('DELETE FROM products WHERE id = ?').run(id);
-    db.save();
-
+    await supabase.from('products').delete().eq('id', id);
     return NextResponse.json({ message: 'Product deleted' });
   } catch (error) {
     console.error('Delete product error:', error);
@@ -130,35 +89,41 @@ export async function DELETE(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const admin = await getAdminUser(request);
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { markup_percent, markup_amount } = await request.json();
 
-    const db = await getDb();
-
     if (markup_percent != null && markup_percent !== 0) {
-      db.prepare(`
-        UPDATE products SET
-          markup_percent = markup_percent + ?,
-          selling_price = cost_price * (1 + (markup_percent + markup_percent) / 100.0) + markup_amount,
-          updated_at = datetime('now')
-      `).run(markup_percent);
+      // Add markup_percent to all products' existing markup
+      const { data: products } = await supabase.from('products').select('*');
+      if (products) {
+        for (const p of products) {
+          const newPercent = (p.markup_percent || 0) + markup_percent;
+          const newSellingPrice = p.cost_price * (1 + newPercent / 100) + (p.markup_amount || 0);
+          await supabase.from('products').update({
+            markup_percent: newPercent,
+            selling_price: newSellingPrice,
+          }).eq('id', p.id);
+        }
+      }
     }
 
     if (markup_amount != null && markup_amount !== 0) {
-      db.prepare(`
-        UPDATE products SET
-          markup_amount = markup_amount + ?,
-          selling_price = cost_price * (1 + markup_percent / 100.0) + (markup_amount + ?),
-          updated_at = datetime('now')
-      `).run(markup_amount, markup_amount);
+      const { data: products } = await supabase.from('products').select('*');
+      if (products) {
+        for (const p of products) {
+          const newAmount = (p.markup_amount || 0) + markup_amount;
+          const newSellingPrice = p.cost_price * (1 + (p.markup_percent || 0) / 100) + newAmount;
+          await supabase.from('products').update({
+            markup_amount: newAmount,
+            selling_price: newSellingPrice,
+          }).eq('id', p.id);
+        }
+      }
     }
-    db.save();
 
-    const products = db.prepare('SELECT * FROM products ORDER BY name ASC').all();
-    return NextResponse.json({ products });
+    const { data: updatedProducts } = await supabase.from('products').select('*').order('name');
+    return NextResponse.json({ products: updatedProducts || [] });
   } catch (error) {
     console.error('Bulk markup error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,36 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
-    const db = await getDb();
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
     const search = searchParams.get('search');
     const sort = searchParams.get('sort') || 'name';
 
-    let query = 'SELECT * FROM products WHERE is_active = 1';
-    const params: any[] = [];
+    let query = supabase.from('products').select('*').eq('is_active', true);
 
     if (category && category !== 'ALL') {
-      query += ' AND category = ?';
-      params.push(category);
+      query = query.eq('category', category);
     }
 
     if (search) {
-      query += ' AND (name LIKE ? OR description LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
     }
 
-    if (sort === 'price_asc') query += ' ORDER BY selling_price ASC';
-    else if (sort === 'price_desc') query += ' ORDER BY selling_price DESC';
-    else if (sort === 'name') query += ' ORDER BY name ASC';
-    else if (sort === 'newest') query += ' ORDER BY created_at DESC';
-    else query += ' ORDER BY name ASC';
+    if (sort === 'price_asc') query = query.order('selling_price', { ascending: true });
+    else if (sort === 'price_desc') query = query.order('selling_price', { ascending: false });
+    else if (sort === 'newest') query = query.order('created_at', { ascending: false });
+    else query = query.order('name', { ascending: true });
 
-    const products = db.prepare(query).all(...params) as any[];
+    const { data: products, error } = await query;
 
-    return NextResponse.json({ products });
+    if (error) throw error;
+    return NextResponse.json({ products: products || [] });
   } catch (error) {
     console.error('Products list error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

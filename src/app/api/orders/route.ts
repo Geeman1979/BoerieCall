@@ -1,59 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
-}
+import { supabase, generateId } from '@/lib/supabase';
 
 async function getUser(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value;
   if (!sessionId) return null;
-  const db = await getDb();
-  const user = db.prepare('SELECT id, role, email, name FROM users WHERE id = ?').get(sessionId) as any;
+  const { data: user } = await supabase.from('users').select('id, role, email, name').eq('id', sessionId).single();
   return user;
 }
 
 async function getAdminUser(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value;
   if (!sessionId) return null;
-  const db = await getDb();
-  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(sessionId) as any;
+  const { data: user } = await supabase.from('users').select('id, role').eq('id', sessionId).single();
   if (!user || user.role !== 'ADMIN') return null;
   return user;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const db = await getDb();
-
     const admin = await getAdminUser(request);
     if (admin) {
-      const orders = db.prepare(`
-        SELECT o.*, u.name as user_name, u.email as user_email
-        FROM orders o
-        LEFT JOIN users u ON o.user_id = u.id
-        ORDER BY o.created_at DESC
-      `).all() as any[];
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('*, user:users(name, email)')
+        .order('created_at', { ascending: false });
 
-      const enriched = orders.map(order => {
-        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id) as any[];
-        return { ...order, items };
-      });
+      const enriched = await Promise.all((orders || []).map(async (order: any) => {
+        const { data: items } = await supabase.from('order_items').select('*').eq('order_id', order.id);
+        return { ...order, items: items || [], user_name: order.user?.name, user_email: order.user?.email };
+      }));
 
       return NextResponse.json({ orders: enriched });
     }
 
     const user = await getUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const orders = db.prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC').all(user.id) as any[];
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-    const enriched = orders.map(order => {
-      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id) as any[];
-      return { ...order, items };
-    });
+    const enriched = await Promise.all((orders || []).map(async (order: any) => {
+      const { data: items } = await supabase.from('order_items').select('*').eq('order_id', order.id);
+      return { ...order, items: items || [] };
+    }));
 
     return NextResponse.json({ orders: enriched });
   } catch (error) {
@@ -65,95 +57,95 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { delivery_address, city } = await request.json();
+    if (!delivery_address || !city) return NextResponse.json({ error: 'Delivery address and city are required' }, { status: 400 });
 
-    if (!delivery_address || !city) {
-      return NextResponse.json({ error: 'Delivery address and city are required' }, { status: 400 });
-    }
+    // Get cart items with product info
+    const { data: cartItems } = await supabase
+      .from('cart_items')
+      .select('*, product:products!inner(name, selling_price, weight, cost_price, stock_quantity, category)')
+      .eq('user_id', user.id);
 
-    const db = await getDb();
-
-    // Get cart items
-    const cartItems = db.prepare(`
-      SELECT ci.*, p.name, p.selling_price, p.weight, p.cost_price, p.stock_quantity, p.category
-      FROM cart_items ci
-      LEFT JOIN products p ON ci.product_id = p.id
-      WHERE ci.user_id = ? AND ci.product_id IS NOT NULL
-    `).all(user.id) as any[];
-
-    if (cartItems.length === 0) {
-      return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
-    }
+    if (!cartItems || cartItems.length === 0) return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
 
     // Check stock
     for (const item of cartItems) {
-      if (item.quantity > item.stock_quantity) {
-        return NextResponse.json({ error: `Not enough stock for ${item.name}` }, { status: 400 });
+      if (item.quantity > item.product.stock_quantity) {
+        return NextResponse.json({ error: `Not enough stock for ${item.product.name}` }, { status: 400 });
       }
     }
 
-    // Calculate subtotal
+    // Calculate totals
     let subtotal = 0;
     let totalWeight = 0;
     for (const item of cartItems) {
-      subtotal += item.selling_price * item.quantity;
-      totalWeight += item.weight * item.quantity;
+      subtotal += item.product.selling_price * item.quantity;
+      totalWeight += item.product.weight * item.quantity;
     }
 
-    // Apply reseller discount
+    // Reseller discount
     let discount = 0;
     const isReseller = user.role === 'RESELLER';
-    if (isReseller) {
-      discount = subtotal * 0.1; // 10% discount
-    }
+    if (isReseller) discount = subtotal * 0.1;
 
-    // Calculate delivery fee
+    // Delivery fee
     let deliveryFee = 150;
     if (isReseller) {
-      if (city === 'Johannesburg' && totalWeight > 10) {
-        deliveryFee = 0;
-      } else if (city === 'Pretoria' && totalWeight > 20) {
-        deliveryFee = 0;
-      }
+      if (city === 'Johannesburg' && totalWeight > 10) deliveryFee = 0;
+      else if (city === 'Pretoria' && totalWeight > 20) deliveryFee = 0;
     }
 
     const totalAmount = subtotal - discount + deliveryFee;
-
-    // Generate order
     const orderId = generateId();
     const stitchPaymentId = 'stch_' + generateId().substring(0, 24);
 
-    db.prepare(`
-      INSERT INTO orders (id, user_id, subtotal, discount, delivery_fee, total_amount, status, delivery_address, city, total_weight, payment_method, stitch_payment_id)
-      VALUES (?, ?, ?, ?, ?, ?, 'PAID', ?, ?, ?, 'STITCH', ?)
-    `).run(orderId, user.id, subtotal, discount, deliveryFee, totalAmount, delivery_address, city, totalWeight, stitchPaymentId);
+    // Create order
+    await supabase.from('orders').insert({
+      id: orderId,
+      user_id: user.id,
+      subtotal,
+      discount,
+      delivery_fee: deliveryFee,
+      total_amount: totalAmount,
+      status: 'PAID',
+      delivery_address,
+      city,
+      total_weight: totalWeight,
+      payment_method: 'STITCH',
+      stitch_payment_id: stitchPaymentId,
+    });
 
     // Create order items and update stock
-    const insertItem = db.prepare(`
-      INSERT INTO order_items (id, order_id, product_id, product_name, quantity, unit_price, weight)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const updateStock = db.prepare('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?');
-
     for (const item of cartItems) {
-      const itemId = generateId();
-      insertItem.run(itemId, orderId, item.product_id, item.name, item.quantity, item.selling_price, item.weight);
-      updateStock.run(item.quantity, item.product_id);
+      await supabase.from('order_items').insert({
+        id: generateId(),
+        order_id: orderId,
+        product_id: item.product_id,
+        product_name: item.product.name,
+        quantity: item.quantity,
+        unit_price: item.product.selling_price,
+        weight: item.product.weight,
+      });
+
+      // Update stock
+      const { data: product } = await supabase.from('products').select('stock_quantity').eq('id', item.product_id).single();
+      if (product) {
+        await supabase.from('products').update({
+          stock_quantity: product.stock_quantity - item.quantity
+        }).eq('id', item.product_id);
+      }
     }
 
     // Clear cart
-    db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(user.id);
-    db.save();
+    await supabase.from('cart_items').delete().eq('user_id', user.id);
 
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId) as any[];
+    // Fetch completed order
+    const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+    const { data: items } = await supabase.from('order_items').select('*').eq('order_id', orderId);
 
-    return NextResponse.json({ order: { ...order, items } }, { status: 201 });
+    return NextResponse.json({ order: { ...order, items: items || [] } }, { status: 201 });
   } catch (error) {
     console.error('Create order error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
