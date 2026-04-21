@@ -5,7 +5,7 @@ import {
   Flame, ShoppingCart, User, LogOut, Search, Menu, X, Plus, Minus, Trash2,
   ChevronRight, Package, Truck, Shield, Heart, Award, ArrowLeft, Loader2,
   CheckCircle, AlertCircle, Star, BarChart3, Tag, Edit, Percent,
-  DollarSign, ChevronDown, Store, LogIn, CreditCard
+  DollarSign, ChevronDown, Store, LogIn, CreditCard, RefreshCw, AlertTriangle, Eye, EyeOff, Filter
 } from 'lucide-react';
 import { useStore, type Product, type Order, type View } from '@/store/useStore';
 
@@ -1145,64 +1145,187 @@ function AdminView() {
 // --- Admin Products ---
 
 function AdminProducts() {
+  const storeProducts = useStore(s => s.products);
   const [products, setProducts] = useState<Product[]>([]);
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCat, setFilterCat] = useState('ALL');
+  const [showInactive, setShowInactive] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const refreshProducts = async () => {
-    try { const res = await fetch('/api/admin/products'); if (res.ok) setProducts((await res.json()).products); } catch {}
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const res = await fetch('/api/admin/products');
+      if (res.ok) {
+        const data = (await res.json()).products || [];
+        setProducts(data);
+        setUsingFallback(false);
+        // Also refresh storefront products in the store
+        const pubRes = await fetch('/api/products');
+        if (pubRes.ok) gs().setProducts((await pubRes.json()).products);
+      } else {
+        const errData = await res.json().catch(() => null);
+        setFetchError(errData?.error || `Server error (${res.status})`);
+        // Fallback: use products from the store (loaded via public API)
+        if (storeProducts.length > 0) {
+          setProducts(storeProducts);
+          setUsingFallback(true);
+        }
+      }
+    } catch (e) {
+      setFetchError('Network error - check your connection');
+      if (storeProducts.length > 0) {
+        setProducts(storeProducts);
+        setUsingFallback(true);
+      }
+    }
     setLoading(false);
   };
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/products');
-        if (res.ok && !cancelled) setProducts((await res.json()).products);
-      } catch {}
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
+    refreshProducts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const deleteProduct = async (id: string) => {
-    if (!confirm('Delete this product?')) return;
-    await fetch(`/api/admin/products?id=${id}`, { method: 'DELETE' });
-    refreshProducts(); gs().showToast('Product deleted');
+    const p = products.find(x => x.id === id);
+    const name = p?.name || 'this product';
+    if (!confirm(`Are you sure you want to delete "${name}"? This cannot be undone.`)) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/admin/products?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setProducts(prev => prev.filter(x => x.id !== id));
+        gs().showToast(`"${name}" deleted`);
+      } else {
+        const errData = await res.json().catch(() => null);
+        gs().showToast(errData?.error || 'Failed to delete product', 'error');
+      }
+    } catch {
+      gs().showToast('Network error - could not delete', 'error');
+    }
+    setDeletingId(null);
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>;
+  // Filter products
+  const filtered = products.filter(p => {
+    if (filterCat !== 'ALL' && p.category !== filterCat) return false;
+    if (!showInactive && !p.is_active) return false;
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      return p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const activeCount = products.filter(p => p.is_active).length;
+  const inactiveCount = products.filter(p => !p.is_active).length;
+
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /><span className="ml-3 text-orange-200/50">Loading products...</span></div>;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-orange-200/40">{products.length} products</p>
-        <button onClick={() => { setEditing(null); setShowForm(true); }} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center gap-2"><Plus className="w-4 h-4" /> Add Product</button>
+      {/* Error / Warning banner */}
+      {fetchError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-red-300">Could not load admin products</p>
+            <p className="text-xs text-red-200/60 mt-1">{fetchError}. {usingFallback ? 'Showing storefront products below (edits may not save).' : 'Try signing out and back in, then refresh.'}</p>
+          </div>
+          <button onClick={refreshProducts} className="shrink-0 px-3 py-1.5 bg-red-500/20 text-red-300 text-xs font-medium rounded-lg hover:bg-red-500/30 flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Retry</button>
+        </div>
+      )}
+
+      {/* Top bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-sm font-bold text-orange-100">{products.length} product{products.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-orange-200/40">{activeCount} active{inactiveCount > 0 ? ` / ${inactiveCount} inactive` : ''}{usingFallback ? ' (storefront view)' : ''}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={refreshProducts} className="p-2 bg-[#1A1618] border border-[#2C2520] rounded-lg text-orange-200/50 hover:text-orange-400 hover:border-orange-500/30 transition-colors" title="Refresh"><RefreshCw className="w-4 h-4" /></button>
+          <button onClick={() => { setEditing(null); setShowForm(true); }} className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 hover:from-orange-600 hover:to-orange-800 shadow-md shadow-orange-500/20 transition-all"><Plus className="w-4 h-4" /> Add Product</button>
+        </div>
       </div>
+
+      {/* Search + Filter bar */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-200/30" />
+          <input type="text" placeholder="Search products by name or description..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-[#1A1618] border border-[#2C2520] rounded-lg text-sm text-orange-100 placeholder-orange-200/30 focus:border-orange-500/50 focus:outline-none transition-colors" />
+        </div>
+        <div className="flex gap-2">
+          <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="bg-[#1A1618] border border-[#2C2520] rounded-lg px-3 py-2.5 text-sm text-orange-100 focus:outline-none">
+            {CATS.map(c => <option key={c.v} value={c.v}>{c.e} {c.l}</option>)}
+          </select>
+          <button onClick={() => setShowInactive(!showInactive)} className={`px-3 py-2.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-colors ${showInactive ? 'bg-[#1A1618] border-[#2C2520] text-orange-200/50' : 'bg-orange-500/10 border-orange-500/30 text-orange-400'}`} title={showInactive ? 'Hide inactive' : 'Show inactive'}>
+            {showInactive ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{showInactive ? 'Hide Inactive' : 'Show Inactive'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Product form modal */}
       {showForm && <ProductForm editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={refreshProducts} />}
-      <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-        {products.map(p => (
-          <div key={p.id} className="bg-[#1A1618] rounded-lg border border-[#2C2520] p-4 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-md overflow-hidden bg-[#0D0A0B] shrink-0">
-              <img src={getProductImage({ name: p.name, category: p.category })} alt={p.name} className="w-full h-full object-cover" />
+
+      {/* Product list */}
+      <div className="space-y-2">
+        {filtered.length === 0 && products.length > 0 && (
+          <div className="text-center py-12 text-orange-200/40"><Filter className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>No products match your search/filter.</p><button onClick={() => { setSearchTerm(''); setFilterCat('ALL'); setShowInactive(true); }} className="text-orange-400 text-sm mt-2 hover:underline">Clear filters</button></div>
+        )}
+        {products.length === 0 && !loading && (
+          <div className="text-center py-16 border-2 border-dashed border-[#2C2520] rounded-xl">
+            <Package className="w-12 h-12 text-orange-200/20 mx-auto mb-3" />
+            <p className="text-orange-200/50 font-medium">No products found</p>
+            <p className="text-orange-200/30 text-sm mt-1">Add your first product to get started.</p>
+          </div>
+        )}
+        {filtered.map(p => (
+          <div key={p.id} className="bg-[#1A1618] rounded-xl border border-[#2C2520] p-4 flex items-center gap-4 hover:border-orange-500/20 transition-colors group">
+            <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#0D0A0B] shrink-0 border border-[#2C2520]">
+              <img src={p.image_url || getProductImage({ name: p.name, category: p.category })} alt={p.name} className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2"><h3 className="font-bold text-sm truncate">{p.name}</h3>{!p.is_active && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">INACTIVE</span>}</div>
-              <p className="text-xs text-orange-200/40">{catLabel(p.category)} &bull; Stock: {p.stock_quantity}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm text-orange-100 truncate">{p.name}</h3>
+                {!p.is_active && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold border border-red-500/20">INACTIVE</span>}
+                <span className="text-[10px] bg-[#0D0A0B] text-orange-200/50 px-1.5 py-0.5 rounded font-medium">{catLabel(p.category)}</span>
+              </div>
+              <p className="text-xs text-orange-200/40 mt-0.5 truncate">{p.description || 'No description'}</p>
+              <div className="flex items-center gap-3 mt-1.5">
+                <span className={`text-xs font-medium ${p.stock_quantity > 10 ? 'text-green-400' : p.stock_quantity > 0 ? 'text-orange-400' : 'text-red-400'}`}>Stock: {p.stock_quantity}</span>
+                {p.weight > 0 && <span className="text-xs text-orange-200/30">{p.weight}kg</span>}
+              </div>
             </div>
             <div className="text-right shrink-0">
-              <p className="font-bold text-sm text-primary">{fmt(p.selling_price)}</p>
-              <p className="text-xs text-orange-200/40">Cost: {fmt(p.cost_price)} | {p.markup_percent}%</p>
+              <p className="font-bold text-base text-orange-400">{fmt(p.selling_price)}</p>
+              <p className="text-xs text-orange-200/40">Cost: {fmt(p.cost_price)}</p>
+              <p className="text-[10px] text-orange-200/30">{p.markup_percent}% markup</p>
             </div>
-            <div className="flex gap-1 shrink-0">
-              <button onClick={() => { setEditing(p); setShowForm(true); }} className="p-2 hover:bg-white/5 rounded-lg text-orange-200/40 hover:text-primary"><Edit className="w-4 h-4" /></button>
-              <button onClick={() => deleteProduct(p.id)} className="p-2 hover:bg-red-50 rounded-lg text-orange-200/40 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+            <div className="flex gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => { setEditing(p); setShowForm(true); }} className="p-2.5 hover:bg-orange-500/10 rounded-lg text-orange-200/50 hover:text-orange-400 transition-colors" title="Edit product"><Edit className="w-4 h-4" /></button>
+              <button onClick={() => deleteProduct(p.id)} disabled={deletingId === p.id} className="p-2.5 hover:bg-red-500/10 rounded-lg text-orange-200/50 hover:text-red-400 transition-colors disabled:opacity-40" title="Delete product">{deletingId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}</button>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Bottom stats bar */}
+      {filtered.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-[#2C2520] flex items-center justify-between text-xs text-orange-200/30">
+          <span>Showing {filtered.length} of {products.length} products</span>
+          <span>Total stock value: {fmt(filtered.reduce((s, p) => s + (p.selling_price * p.stock_quantity), 0))}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1210,20 +1333,30 @@ function AdminProducts() {
 function ProductForm({ editing, onClose, onSave }: { editing: Product | null; onClose: () => void; onSave: () => void }) {
   const [f, setF] = useState(editing || { name: '', description: '', category: 'BILTONG', subcategory: '', cost_price: 0, markup_percent: 50, selling_price: 0, weight: 0, stock_quantity: 0, image_url: '', is_active: true });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const calcPrice = (cost: number, markup: number) => cost * (1 + markup / 100);
-  const upd = (k: string, v: unknown) => setF(prev => ({ ...prev, [k]: v }));
+  const upd = (k: string, v: unknown) => { setF(prev => ({ ...prev, [k]: v })); setSaveError(null); };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setSaveError(null);
     const body = { ...f, cost_price: Number(f.cost_price), markup_percent: Number(f.markup_percent), selling_price: Number(f.selling_price) || calcPrice(Number(f.cost_price), Number(f.markup_percent)), weight: Number(f.weight), stock_quantity: Number(f.stock_quantity) };
     try {
-      if (editing) await fetch('/api/admin/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...body }) });
-      else await fetch('/api/admin/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      gs().showToast(editing ? 'Product updated' : 'Product created');
-      onClose(); onSave();
-    } catch { gs().showToast('Save failed', 'error'); }
+      const method = editing ? 'PUT' : 'POST';
+      const payload = editing ? { id: editing.id, ...body } : body;
+      const res = await fetch('/api/admin/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (res.ok) {
+        gs().showToast(editing ? 'Product updated' : 'Product created');
+        onClose(); onSave();
+      } else {
+        const errData = await res.json().catch(() => null);
+        const errMsg = errData?.error || `Server error (${res.status})`;
+        setSaveError(errMsg);
+        gs().showToast(errMsg, 'error');
+      }
+    } catch { setSaveError('Network error - check your connection'); gs().showToast('Network error', 'error'); }
     setSaving(false);
   };
 
@@ -1307,6 +1440,17 @@ function ProductForm({ editing, onClose, onSave }: { editing: Product | null; on
                 </div>
               </div>
             </div>
+
+            {/* Error display */}
+            {saveError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-700">Could not save product</p>
+                  <p className="text-xs text-red-500 mt-0.5">{saveError}</p>
+                </div>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex gap-4 pt-4">
