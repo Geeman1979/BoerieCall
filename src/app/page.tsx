@@ -411,6 +411,107 @@ function HomeView() {
         </div>
       </section>
 
+      {/* ========== Pricing / Campaign D: The Menu ========== */}
+      <section className="bg-[#0A0809] border-y border-[#2C2520]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+          <div className="text-center mb-12">
+            <div className="inline-block px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full text-xs font-bold text-orange-400 tracking-wider uppercase mb-4">Campaign D &mdash; Value Proposition</div>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">The Menu</h2>
+            <p className="text-orange-200/40 max-w-xl mx-auto">Premium doesn&apos;t mean pricey. Our smoked meats are priced so you can satisfy that craving without breaking the bank.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            <div className="bg-[#1A1618] border border-[#2C2520] rounded-2xl p-8 text-center hover:border-orange-500/30 transition-colors">
+              <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 mx-auto mb-4">
+                <span className="text-2xl">&#9832;</span>
+              </div>
+              <h3 className="text-lg font-bold text-orange-100 mb-2">The Snacker</h3>
+              <p className="text-3xl font-bold text-orange-400 mb-1">R85 <span className="text-base font-normal text-orange-200/40">avg</span></p>
+              <p className="text-sm text-orange-200/40 mb-4">Biltong sticks, droewors, and snack packs. Perfect for on-the-go cravings.</p>
+              <ul className="text-sm text-orange-200/50 space-y-1">
+                <li>&bull; Classic Biltong 200g</li>
+                <li>&bull; Droewors Sticks</li>
+                <li>&bull; Chilli Biltong</li>
+              </ul>
+            </div>
+            <div className="bg-[#1A1618] border-2 border-orange-500/40 rounded-2xl p-8 text-center relative shadow-lg shadow-orange-500/10">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-orange-500 to-orange-700 text-white text-xs font-bold rounded-full">Most Popular</div>
+              <div className="w-16 h-16 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 mx-auto mb-4">
+                <span className="text-2xl">&#9832;</span>
+              </div>
+              <h3 className="text-lg font-bold text-orange-100 mb-2">The Feeder</h3>
+              <p className="text-3xl font-bold text-orange-400 mb-1">R185 <span className="text-base font-normal text-orange-200/40">avg</span></p>
+              <p className="text-sm text-orange-200/40 mb-4">Hot smoked brisket, ribs, and pork belly. The braai hero pack.</p>
+              <ul className="text-sm text-orange-200/50 space-y-1">
+                <li>&bull; Smoked Brisket 500g</li>
+                <li>&bull; BBQ Ribs Rack</li>
+                <li>&bull; Smoked Pork Belly</li>
+              </ul>
+            </div>
+            <div className="bg-[#1A1618] border border-[#2C2520] rounded-2xl p-8 text-center hover:border-orange-500/30 transition-colors">
+              <div className="w-16 h-16 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 mx-auto mb-4">
+                <span className="text-2xl">&#9733;</span>
+              </div>
+              <h3 className="text-lg font-bold text-orange-100 mb-2">The Showstopper</h3>
+              <p className="text-3xl font-bold text-yellow-400 mb-1">R350 <span className="text-base font-normal text-orange-200/40">avg</span></p>
+              <p className="text-sm text-orange-200/40 mb-4">Cold smoked salmon, gift boxes, and premium cuts. Impressive flavour.</p>
+              <ul className="text-sm text-orange-200/50 space-y-1">
+                <li>&bull; Cold Smoked Salmon</li>
+                <li>&bull; Gift Box</li>
+                <li>&bull; Smoked Biltong 1kg</li>
+              </ul>
+            </div>
+          </div>
+          <div className="text-center mt-10">
+            <button onClick={() => { setCategoryFilter('ALL'); setView('shop'); }} className="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-700 text-white font-bold rounded-lg hover:from-orange-600 hover:to-orange-800 shadow-lg shadow-orange-500/20 transition-all text-lg">See Full Menu &rarr;</button>
+          </div>
+        </div>
+      </section>
+
+      {/* ========== RESELLER CTA ========== */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0">
+          <img src="/images/campaign-reseller.jpg" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/80 to-black/60" />
+        </div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20">
+          <div className="max-w-2xl">
+            <div className="inline-block px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full text-xs font-bold text-green-400 tracking-wider uppercase mb-4">Reseller Programme</div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4 leading-tight">
+              Sell Our Meat.<br />
+              <span className="text-green-400 neon-text">Keep 15%.</span>
+            </h2>
+            <p className="text-lg text-orange-200/60 mb-6 max-w-lg">Want to make money while you sleep? Join the BoerieCall Reseller Programme. You buy at 15% off the RRP, sell at full price, and pocket the difference. Simple as that.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5">
+                <p className="text-3xl font-bold text-green-400">15%</p>
+                <p className="text-sm text-orange-200/50 mt-1">Instant discount on every order</p>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5">
+                <p className="text-3xl font-bold text-orange-400">RRP</p>
+                <p className="text-sm text-orange-200/50 mt-1">We set the price, you collect the margin</p>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5">
+                <p className="text-3xl font-bold text-yellow-400">Free</p>
+                <p className="text-sm text-orange-200/50 mt-1">Delivery perks on bulk orders</p>
+              </div>
+            </div>
+
+            <div className="bg-[#1A1618]/80 backdrop-blur-sm border border-[#2C2520] rounded-xl p-6 mb-8">
+              <p className="text-orange-100/80 italic leading-relaxed">&ldquo;I started selling BoerieCall biltong from my boot at the cricket. Now I supply three spaza shops. The margin is lekker, and the meat sells itself.&rdquo;</p>
+              <p className="text-orange-200/40 text-sm mt-2">&mdash; Happy Reseller, Johannesburg</p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button onClick={() => { setView('register'); }} className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-700 text-white font-bold rounded-lg hover:from-green-600 hover:to-green-800 shadow-lg shadow-green-500/20 transition-all">Become a Reseller &rarr;</button>
+              <button onClick={() => { setCategoryFilter('ALL'); setView('shop'); }} className="px-8 py-4 bg-white/5 backdrop-blur-sm text-white font-bold rounded-lg border border-white/20 hover:bg-white/10 transition-colors">Browse Products</button>
+            </div>
+
+            <p className="text-orange-200/30 text-xs mt-6">Recommended: Resellers are encouraged to charge the full RRP to protect brand value and ensure consistent customer pricing.</p>
+          </div>
+        </div>
+      </section>
+
       {/* ========== TikTok Section ========== */}
       <section className="bg-[#0A0809] py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -670,7 +771,7 @@ function PaymentModalInner() {
   const totalWeight = cartItems.reduce((sum, i) => sum + (i.product?.weight || 0) * i.quantity, 0);
   const user = useStore(s => s.user);
   const isReseller = user?.role === 'RESELLER';
-  const discount = isReseller ? subtotal * 0.1 : 0;
+  const discount = isReseller ? subtotal * 0.15 : 0;
   let deliveryFee = 150;
   if (isReseller) {
     if (_checkoutCity === 'Johannesburg' && totalWeight > 10) deliveryFee = 0;
@@ -737,7 +838,7 @@ function CheckoutView() {
   const subtotal = cartItems.reduce((sum, i) => sum + (i.product?.selling_price || 0) * i.quantity, 0);
   const totalWeight = cartItems.reduce((sum, i) => sum + (i.product?.weight || 0) * i.quantity, 0);
   const isReseller = user?.role === 'RESELLER';
-  const discount = isReseller ? subtotal * 0.1 : 0;
+  const discount = isReseller ? subtotal * 0.15 : 0;
   let deliveryFee = 150;
   if (isReseller) {
     if (city === 'Johannesburg' && totalWeight > 10) deliveryFee = 0;
@@ -906,7 +1007,7 @@ function RegisterView() {
             <div><label className="block text-sm font-medium mb-1">Account Type</label>
               <select value={form.role} onChange={e => upd('role', e.target.value)} className="w-full px-3 py-2.5 border border-[#2C2520] rounded-lg text-sm bg-[#1A1618]">
                 <option value="BUYER">Buyer</option>
-                <option value="RESELLER">Reseller (10% discount, free delivery perks)</option>
+                <option value="RESELLER">Reseller (15% discount + free delivery perks)</option>
               </select>
             </div>
             <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-orange-600 to-orange-800 text-white font-bold rounded-lg hover:from-orange-700 hover:to-orange-900 disabled:opacity-50 flex items-center justify-center gap-2">
